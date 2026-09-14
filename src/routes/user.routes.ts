@@ -36,6 +36,21 @@ userAdminRouter.post('/', requireOwner, validate(createSchema), asyncHandler(asy
   });
 }));
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'กรุณากรอกรหัสผ่านปัจจุบัน'),
+  newPassword: z.string().min(8, 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร'),
+}).strict();
+
+userAdminRouter.patch('/me/password', validate(changePasswordSchema), asyncHandler(async (req, res) => {
+  const user = await User.findById(req.auth!.sub).select('+passwordHash');
+  if (!user) throw ApiError.notFound('ไม่พบผู้ใช้งาน');
+  const ok = await user.comparePassword(req.body.currentPassword);
+  if (!ok) throw ApiError.unauthorized('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+  user.passwordHash = await hashPassword(req.body.newPassword);
+  await user.save();
+  res.json({ success: true, data: null });
+}));
+
 userAdminRouter.patch('/:id/status', requireOwner,
   validate(z.object({ status: z.enum(['active', 'suspended']) })),
   asyncHandler(async (req, res) => {
