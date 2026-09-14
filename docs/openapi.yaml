@@ -1,0 +1,2093 @@
+openapi: 3.1.0
+info:
+  title: D1LANDANDHOUSE API
+  version: 1.0.0
+  description: |
+    REST API สำหรับระบบเว็บไซต์นำเสนออสังหาริมทรัพย์ระดับ Luxury และระบบหลังบ้าน
+
+    - `/api/v1/public/*`  — สำหรับเว็บไซต์หน้าบ้าน (ไม่ต้องล็อกอิน ยกเว้น `/public/me/*`)
+    - `/api/v1/admin/*`   — สำหรับ Backoffice (ต้องล็อกอิน + RBAC: owner | admin)
+
+    ระบบนี้เป็นเว็บนำเสนอทรัพย์และเก็บลีดเท่านั้น ไม่มีการซื้อขาย/ชำระเงินผ่าน API
+  contact:
+    name: Development Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.example.com/api/v1
+    description: Production
+  - url: https://stg-api.example.com/api/v1
+    description: Staging
+  - url: http://localhost:4000/api/v1
+    description: Local
+
+tags:
+  - name: "Public: Properties"
+  - name: "Public: Projects"
+  - name: "Public: Content"
+  - name: "Public: Leads"
+  - name: "Public: Tools"
+  - name: "Public: Customer Account"
+  - name: "Admin: Auth"
+  - name: "Admin: Users"
+  - name: "Admin: Properties"
+  - name: "Admin: Projects"
+  - name: "Admin: Media"
+  - name: "Admin: Articles"
+  - name: "Admin: Promotions"
+  - name: "Admin: Leads"
+  - name: "Admin: Appointments"
+  - name: "Admin: Content"
+  - name: "Admin: Settings"
+  - name: "Admin: Dashboard"
+
+security: []
+
+paths:
+  # ══════════════════════════ PUBLIC: PROPERTIES ══════════════════════════
+  /public/properties:
+    get:
+      tags: ["Public: Properties"]
+      summary: รายการทรัพย์พร้อมตัวกรอง
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/AcceptLanguage'
+        - { name: propertyType, in: query, schema: { type: string }, example: "condo,house", description: CSV ของประเภททรัพย์ }
+        - { name: listingType,  in: query, schema: { type: string, enum: [sale, rent, sale_rent] } }
+        - { name: priceMin,     in: query, schema: { type: number } }
+        - { name: priceMax,     in: query, schema: { type: number } }
+        - { name: bedrooms,     in: query, schema: { type: string }, example: "3", description: "ตัวเลข หรือ '5+'" }
+        - { name: bathrooms,    in: query, schema: { type: integer } }
+        - { name: parking,      in: query, schema: { type: integer } }
+        - { name: areaMin,      in: query, schema: { type: number }, description: พื้นที่ใช้สอยขั้นต่ำ (ตร.ม.) }
+        - { name: areaMax,      in: query, schema: { type: number } }
+        - { name: landMin,      in: query, schema: { type: number }, description: ที่ดินขั้นต่ำ (ตร.วา) }
+        - { name: landMax,      in: query, schema: { type: number } }
+        - { name: provinceId,   in: query, schema: { type: string } }
+        - { name: districtId,   in: query, schema: { type: string } }
+        - { name: zones,        in: query, schema: { type: string }, description: CSV ของ slug ย่าน }
+        - { name: amenities,    in: query, schema: { type: string }, description: CSV ของ slug สิ่งอำนวยความสะดวก }
+        - { name: nearBts,      in: query, schema: { type: boolean } }
+        - { name: nearMrt,      in: query, schema: { type: boolean } }
+        - { name: lat,          in: query, schema: { type: number } }
+        - { name: lng,          in: query, schema: { type: number } }
+        - { name: radiusKm,     in: query, schema: { type: number, default: 5 } }
+        - { name: bounds,       in: query, schema: { type: string }, example: "100.4,13.6,100.7,13.9", description: "swLng,swLat,neLng,neLat" }
+        - { name: keyword,      in: query, schema: { type: string } }
+        - { name: hasPromotion, in: query, schema: { type: boolean } }
+        - { name: projectId,    in: query, schema: { type: string } }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: ['-publishedAt', 'publishedAt', 'price.sale', '-price.sale', '-stats.views', 'featured']
+            default: '-publishedAt'
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PropertyListItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /public/properties/featured:
+    get:
+      tags: ["Public: Properties"]
+      summary: ทรัพย์แนะนำสำหรับหน้าแรก
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 6, maximum: 24 } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PropertyListItem' }
+
+  /public/properties/map:
+    get:
+      tags: ["Public: Properties"]
+      summary: จุดทรัพย์สำหรับวางหมุดบนแผนที่ (สูงสุด 500 จุด)
+      parameters:
+        - { name: bounds, in: query, schema: { type: string } }
+        - { name: propertyType, in: query, schema: { type: string } }
+        - { name: priceMax, in: query, schema: { type: number } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PropertyMapPin' }
+
+  /public/properties/{slug}:
+    get:
+      tags: ["Public: Properties"]
+      summary: รายละเอียดทรัพย์
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+        - $ref: '#/components/parameters/AcceptLanguage'
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/PropertyDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/properties/{slug}/similar:
+    get:
+      tags: ["Public: Properties"]
+      summary: ทรัพย์ใกล้เคียงที่น่าสนใจ
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+        - { name: limit, in: query, schema: { type: integer, default: 6 } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PropertyListItem' }
+
+  /public/properties/{id}/view:
+    post:
+      tags: ["Public: Properties"]
+      summary: บันทึกยอดเข้าชม (fire-and-forget)
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204': { description: บันทึกแล้ว }
+
+  /public/search/suggest:
+    get:
+      tags: ["Public: Properties"]
+      summary: Autocomplete — ทรัพย์ / โครงการ / ทำเล
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2 } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      properties: { type: array, items: { $ref: '#/components/schemas/SuggestItem' } }
+                      projects:   { type: array, items: { $ref: '#/components/schemas/SuggestItem' } }
+                      locations:  { type: array, items: { $ref: '#/components/schemas/SuggestItem' } }
+
+  # ══════════════════════════ PUBLIC: PROJECTS ══════════════════════════
+  /public/projects:
+    get:
+      tags: ["Public: Projects"]
+      summary: รายการโครงการ
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - { name: projectType, in: query, schema: { type: string } }
+        - { name: constructionStatus, in: query, schema: { type: string } }
+        - { name: provinceId, in: query, schema: { type: string } }
+        - { name: keyword, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/ProjectListItem' } }
+
+  /public/projects/{slug}:
+    get:
+      tags: ["Public: Projects"]
+      summary: รายละเอียดโครงการ
+      parameters: [ { $ref: '#/components/parameters/Slug' } ]
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/ProjectDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/projects/{slug}/units:
+    get:
+      tags: ["Public: Projects"]
+      summary: ยูนิตที่ว่างในโครงการ
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+        - { name: bedrooms, in: query, schema: { type: string } }
+        - { name: priceMin, in: query, schema: { type: number } }
+        - { name: priceMax, in: query, schema: { type: number } }
+        - { name: listingType, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/PropertyListItem' } }
+
+  # ══════════════════════════ PUBLIC: CONTENT ══════════════════════════
+  /public/settings:
+    get:
+      tags: ["Public: Content"]
+      summary: ข้อมูลเว็บไซต์ที่จำเป็นต่อการแสดงผล (โลโก้ ช่องทางติดต่อ social feature flags)
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/PublicSettings' }
+
+  /public/pages/{key}:
+    get:
+      tags: ["Public: Content"]
+      summary: เนื้อหาหน้าเว็บแบบ section
+      parameters:
+        - { name: key, in: path, required: true, schema: { type: string }, example: home }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Page' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/menus/{location}:
+    get:
+      tags: ["Public: Content"]
+      summary: เมนูนำทางตามตำแหน่ง
+      parameters:
+        - { name: location, in: path, required: true, schema: { type: string, enum: [header, footer_col1, footer_col2, footer_col3, footer_col4, mobile, legal] } }
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { $ref: '#/components/schemas/Menu' } } } } } }
+
+  /public/banners:
+    get:
+      tags: ["Public: Content"]
+      summary: แบนเนอร์ที่ควรแสดง ณ ตำแหน่งและเวลานี้
+      parameters:
+        - { name: placement, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: '#/components/schemas/Banner' } } } } } } }
+
+  /public/articles:
+    get:
+      tags: ["Public: Content"]
+      summary: รายการบทความ
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - { name: category, in: query, schema: { type: string } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: featured, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/ArticleListItem' } }
+
+  /public/articles/{slug}:
+    get:
+      tags: ["Public: Content"]
+      summary: รายละเอียดบทความ
+      parameters: [ { $ref: '#/components/parameters/Slug' } ]
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { $ref: '#/components/schemas/ArticleDetail' } } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/promotions:
+    get:
+      tags: ["Public: Content"]
+      summary: โปรโมชั่นที่กำลังใช้งานอยู่ ณ เวลาที่เรียก
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: '#/components/schemas/Promotion' } } } } } } }
+
+  /public/locations:
+    get:
+      tags: ["Public: Content"]
+      summary: ข้อมูลพื้นที่สำหรับ dropdown แบบ cascade
+      parameters:
+        - { name: level, in: query, schema: { type: string, enum: [province, district, subdistrict, zone] } }
+        - { name: parentId, in: query, schema: { type: string } }
+        - { name: popular, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: '#/components/schemas/Location' } } } } } } }
+
+  /public/amenities:
+    get:
+      tags: ["Public: Content"]
+      summary: รายการสิ่งอำนวยความสะดวกสำหรับตัวกรอง
+      parameters:
+        - { name: appliesTo, in: query, schema: { type: string, enum: [property, project] } }
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: '#/components/schemas/Amenity' } } } } } } }
+
+  /public/agents:
+    get:
+      tags: ["Public: Content"]
+      summary: ทีมที่ปรึกษาที่แสดงบนเว็บ
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: '#/components/schemas/AgentPublic' } } } } } } }
+
+  # ══════════════════════════ PUBLIC: LEADS ══════════════════════════
+  /public/leads:
+    post:
+      tags: ["Public: Leads"]
+      summary: ส่งฟอร์มติดต่อ (ทรัพย์ / ทั่วไป / floating)
+      description: |
+        ป้องกันสแปมด้วย reCAPTCHA v3 + rate limit 5 ครั้ง/10 นาที/IP + honeypot
+        ถ้าเบอร์โทรซ้ำกับลีดเดิมของทรัพย์เดียวกันภายใน 24 ชม. ระบบจะบันทึกเป็น activity
+        ในลีดเดิมแทนการสร้างลีดใหม่
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LeadCreateRequest' }
+      responses:
+        '201':
+          description: รับลีดแล้ว
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      refNo: { type: string, example: LD-20260914-0042 }
+                      message: { $ref: '#/components/schemas/LocalizedString' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /public/appointments:
+    post:
+      tags: ["Public: Leads"]
+      summary: ขอนัดเข้าชมทรัพย์
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentCreateRequest' }
+      responses:
+        '201':
+          description: รับคำขอนัดแล้ว
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      refNo: { type: string, example: AP-20260914-0007 }
+                      status: { type: string, example: requested }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /public/appointments/slots:
+    get:
+      tags: ["Public: Leads"]
+      summary: ช่วงเวลาที่ยังว่างในวันที่เลือก
+      parameters:
+        - { name: propertyId, in: query, required: true, schema: { type: string } }
+        - { name: date, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        slot: { type: string, example: "13:00-15:00" }
+                        available: { type: boolean }
+
+  /public/newsletter/subscribe:
+    post:
+      tags: ["Public: Leads"]
+      summary: สมัครรับข่าวสาร
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, consentAccepted]
+              properties:
+                email: { type: string, format: email }
+                name: { type: string }
+                consentAccepted: { type: boolean }
+      responses:
+        '201': { description: สมัครแล้ว }
+
+  # ══════════════════════════ PUBLIC: TOOLS ══════════════════════════
+  /public/loan/defaults:
+    get:
+      tags: ["Public: Tools"]
+      summary: ค่าเริ่มต้นของเครื่องคำนวณสินเชื่อ (ตั้งจากหลังบ้าน)
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/LoanDefaults' }
+
+  /public/loan/calculate:
+    post:
+      tags: ["Public: Tools"]
+      summary: คำนวณยอดผ่อนต่อเดือนโดยประมาณ
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoanCalculateRequest' }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/LoanCalculateResult' }
+
+  /public/events:
+    post:
+      tags: ["Public: Tools"]
+      summary: ส่ง analytics event (batch ได้สูงสุด 20 รายการ)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                events:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: object
+                    properties:
+                      type: { type: string, enum: [page_view, property_view, search, contact_click, phone_click, line_click, form_open, form_submit, share, favorite] }
+                      entityType: { type: string }
+                      entityId: { type: string }
+                      sessionId: { type: string }
+      responses:
+        '204': { description: บันทึกแล้ว }
+
+  # ══════════════════════════ PUBLIC: CUSTOMER ACCOUNT ══════════════════════════
+  /public/auth/register:
+    post:
+      tags: ["Public: Customer Account"]
+      summary: สมัครสมาชิกลูกค้า
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name, consentAccepted]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 10 }
+                name: { type: string }
+                phone: { type: string }
+                consentAccepted: { type: boolean }
+      responses:
+        '201': { description: สมัครสำเร็จ ส่งอีเมลยืนยันแล้ว }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /public/auth/login:
+    post:
+      tags: ["Public: Customer Account"]
+      summary: เข้าสู่ระบบ (ลูกค้า)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /public/me/favorites:
+    get:
+      tags: ["Public: Customer Account"]
+      summary: ทรัพย์โปรดของฉัน
+      security: [ { customerAuth: [] } ]
+      responses:
+        '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: '#/components/schemas/PropertyListItem' } } } } } } }
+
+  /public/me/favorites/{propertyId}:
+    post:
+      tags: ["Public: Customer Account"]
+      summary: เพิ่มทรัพย์โปรด
+      security: [ { customerAuth: [] } ]
+      parameters: [ { name: propertyId, in: path, required: true, schema: { type: string } } ]
+      responses: { '201': { description: เพิ่มแล้ว } }
+    delete:
+      tags: ["Public: Customer Account"]
+      summary: ลบทรัพย์โปรด
+      security: [ { customerAuth: [] } ]
+      parameters: [ { name: propertyId, in: path, required: true, schema: { type: string } } ]
+      responses: { '204': { description: ลบแล้ว } }
+
+  /public/me/saved-searches:
+    get:
+      tags: ["Public: Customer Account"]
+      summary: รายการค้นหาที่บันทึกไว้
+      security: [ { customerAuth: [] } ]
+      responses: { '200': { description: สำเร็จ, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, data: { type: array, items: { $ref: '#/components/schemas/SavedSearch' } } } } } } } }
+    post:
+      tags: ["Public: Customer Account"]
+      summary: บันทึกเงื่อนไขค้นหาและเปิดการแจ้งเตือน
+      security: [ { customerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SavedSearchCreateRequest' }
+      responses: { '201': { description: บันทึกแล้ว } }
+
+  /public/me/appointments:
+    get:
+      tags: ["Public: Customer Account"]
+      summary: ประวัติการนัดชมทรัพย์ของฉัน
+      security: [ { customerAuth: [] } ]
+      responses: { '200': { description: สำเร็จ } }
+
+  # ══════════════════════════ ADMIN: AUTH ══════════════════════════
+  /admin/auth/login:
+    post:
+      tags: ["Admin: Auth"]
+      summary: เข้าสู่ระบบหลังบ้าน
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: owner@example.com }
+                password: { type: string }
+      responses:
+        '200':
+          description: สำเร็จ — refresh token ถูกตั้งเป็น httpOnly cookie
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminAuthResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /admin/auth/refresh:
+    post:
+      tags: ["Admin: Auth"]
+      summary: ต่ออายุ access token
+      responses:
+        '200': { description: สำเร็จ }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /admin/auth/me:
+    get:
+      tags: ["Admin: Auth"]
+      summary: ข้อมูลผู้ใช้ปัจจุบัน + รายการสิทธิ์
+      security: [ { adminAuth: [] } ]
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/User'
+                      - type: object
+                        properties:
+                          permissions: { type: array, items: { type: string } }
+
+  # ══════════════════════════ ADMIN: USERS (OWNER ONLY) ══════════════════════════
+  /admin/users:
+    get:
+      tags: ["Admin: Users"]
+      summary: รายการผู้ใช้ระบบ
+      description: '**เฉพาะ Owner** — Admin เรียกจะได้ 403'
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - { name: role, in: query, schema: { type: string, enum: [owner, admin] } }
+        - { name: status, in: query, schema: { type: string, enum: [active, suspended] } }
+      responses:
+        '200': { description: สำเร็จ }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: ["Admin: Users"]
+      summary: สร้างบัญชีผู้ใช้ใหม่ (เฉพาะ Owner)
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, role]
+              properties:
+                email: { type: string, format: email }
+                name: { type: string }
+                phone: { type: string }
+                role: { type: string, enum: [owner, admin] }
+                isAgent: { type: boolean }
+      responses:
+        '201': { description: สร้างแล้ว ส่งอีเมลตั้งรหัสผ่าน }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/users/{id}:
+    patch:
+      tags: ["Admin: Users"]
+      summary: แก้ไขผู้ใช้ (เฉพาะ Owner)
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        '200': { description: สำเร็จ }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: ["Admin: Users"]
+      summary: ลบผู้ใช้ (เฉพาะ Owner — ห้ามลบ Owner คนสุดท้าย)
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses:
+        '204': { description: ลบแล้ว }
+        '409':
+          description: ลบ Owner คนสุดท้ายไม่ได้ (code `LAST_OWNER`)
+          content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+
+  # ══════════════════════════ ADMIN: PROPERTIES ══════════════════════════
+  /admin/properties:
+    get:
+      tags: ["Admin: Properties"]
+      summary: รายการทรัพย์ (รวมร่างและที่อยู่ในถังขยะ)
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - { name: status, in: query, schema: { type: string } }
+        - { name: propertyType, in: query, schema: { type: string } }
+        - { name: agentId, in: query, schema: { type: string } }
+        - { name: deleted, in: query, schema: { type: boolean, default: false } }
+        - { name: q, in: query, schema: { type: string } }
+      responses: { '200': { description: สำเร็จ } }
+    post:
+      tags: ["Admin: Properties"]
+      summary: สร้างทรัพย์ใหม่ (บันทึกร่างได้แม้กรอกไม่ครบ)
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PropertyUpsertRequest' }
+      responses:
+        '201': { description: สร้างแล้ว }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /admin/properties/{id}:
+    get:
+      tags: ["Admin: Properties"]
+      summary: รายละเอียดทรัพย์ (มุมมองหลังบ้าน — รวมข้อมูลเจ้าของทรัพย์)
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses: { '200': { description: สำเร็จ }, '404': { $ref: '#/components/responses/NotFound' } }
+    patch:
+      tags: ["Admin: Properties"]
+      summary: แก้ไขทรัพย์
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/PropertyUpsertRequest' } } }
+      responses: { '200': { description: สำเร็จ } }
+    delete:
+      tags: ["Admin: Properties"]
+      summary: ลบทรัพย์ (soft delete ย้ายเข้าถังขยะ)
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses: { '204': { description: ย้ายเข้าถังขยะแล้ว } }
+
+  /admin/properties/{id}/status:
+    patch:
+      tags: ["Admin: Properties"]
+      summary: เปลี่ยนสถานะทรัพย์
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [draft, published, reserved, sold, rented, hidden] }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/properties/{id}/duplicate:
+    post:
+      tags: ["Admin: Properties"]
+      summary: คัดลอกทรัพย์ (มีประโยชน์กับยูนิตคอนโดที่คล้ายกัน)
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses: { '201': { description: คัดลอกแล้ว (สถานะ draft) } }
+
+  /admin/properties/{id}/purge:
+    delete:
+      tags: ["Admin: Properties"]
+      summary: ลบถาวร (เฉพาะ Owner)
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses:
+        '204': { description: ลบถาวรแล้ว }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/properties/bulk:
+    patch:
+      tags: ["Admin: Properties"]
+      summary: แก้ไขหลายรายการพร้อมกัน
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, action]
+              properties:
+                ids: { type: array, items: { type: string } }
+                action: { type: string, enum: [set_status, assign_agent, add_tags, feature, unfeature, delete] }
+                value: {}
+      responses: { '200': { description: สำเร็จ } }
+
+  # ══════════════════════════ ADMIN: MEDIA ══════════════════════════
+  /admin/media/upload:
+    post:
+      tags: ["Admin: Media"]
+      summary: อัปโหลดไฟล์สื่อ (หลายไฟล์พร้อมกัน)
+      description: คืน id ทันที แล้วสร้างภาพหลายขนาดเบื้องหลังด้วย worker
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files: { type: array, items: { type: string, format: binary } }
+                folder: { type: string }
+      responses:
+        '201': { description: อัปโหลดแล้ว }
+        '413': { description: ไฟล์ใหญ่เกินกำหนด }
+
+  /admin/media/upload-url:
+    post:
+      tags: ["Admin: Media"]
+      summary: ขอ pre-signed URL สำหรับอัปโหลดตรงเข้า storage (แนะนำเมื่อไฟล์ > 10MB)
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, contentType]
+              properties:
+                filename: { type: string }
+                contentType: { type: string }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/media/{id}:
+    patch:
+      tags: ["Admin: Media"]
+      summary: แก้ไข alt / caption / แท็ก
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        content: { application/json: { schema: { type: object } } }
+      responses: { '200': { description: สำเร็จ } }
+    delete:
+      tags: ["Admin: Media"]
+      summary: ลบสื่อ
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - { name: force, in: query, schema: { type: boolean }, description: ยืนยันลบแม้ยังถูกใช้งานอยู่ }
+      responses:
+        '204': { description: ลบแล้ว }
+        '409': { description: 'สื่อถูกใช้งานอยู่ (code `MEDIA_IN_USE`)' }
+
+  # ══════════════════════════ ADMIN: ARTICLES ══════════════════════════
+  /admin/articles:
+    get:
+      tags: ["Admin: Articles"]
+      summary: รายการบทความ
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - { name: status, in: query, schema: { type: string, enum: [draft, scheduled, published, archived] } }
+      responses: { '200': { description: สำเร็จ } }
+    post:
+      tags: ["Admin: Articles"]
+      summary: สร้างบทความ
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArticleUpsertRequest' }
+      responses: { '201': { description: สร้างแล้ว } }
+
+  /admin/articles/{id}/status:
+    patch:
+      tags: ["Admin: Articles"]
+      summary: เปลี่ยนสถานะ / ตั้งเวลาเผยแพร่
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [draft, scheduled, published, archived] }
+                publishedAt: { type: string, format: date-time, description: จำเป็นเมื่อ status = scheduled และต้องเป็นเวลาในอนาคต }
+      responses:
+        '200': { description: สำเร็จ }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  # ══════════════════════════ ADMIN: PROMOTIONS ══════════════════════════
+  /admin/promotions:
+    get:
+      tags: ["Admin: Promotions"]
+      summary: รายการโปรโมชั่น
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - { name: state, in: query, schema: { type: string, enum: [upcoming, active, expired, all], default: all } }
+      responses: { '200': { description: สำเร็จ } }
+    post:
+      tags: ["Admin: Promotions"]
+      summary: สร้างโปรโมชั่น
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PromotionUpsertRequest' }
+      responses:
+        '201': { description: สร้างแล้ว }
+        '422':
+          description: 'ช่วงเวลาไม่ถูกต้อง (code `INVALID_PROMOTION_PERIOD`)'
+
+  /admin/promotions/{id}/affected-properties:
+    get:
+      tags: ["Admin: Promotions"]
+      summary: พรีวิวทรัพย์ที่จะได้รับผลจากโปรโมชั่นนี้
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses: { '200': { description: สำเร็จ } }
+
+  # ══════════════════════════ ADMIN: LEADS ══════════════════════════
+  /admin/leads:
+    get:
+      tags: ["Admin: Leads"]
+      summary: ตารางลีด
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - { name: status, in: query, schema: { type: string, enum: [new, contacted, viewing_scheduled, negotiating, won, lost] } }
+        - { name: source, in: query, schema: { type: string } }
+        - { name: assignedTo, in: query, schema: { type: string } }
+        - { name: intent, in: query, schema: { type: string } }
+        - { name: dateFrom, in: query, schema: { type: string, format: date } }
+        - { name: dateTo, in: query, schema: { type: string, format: date } }
+        - { name: q, in: query, schema: { type: string }, description: ค้นจากชื่อ/เบอร์/อีเมล/เลขอ้างอิง }
+      responses: { '200': { description: สำเร็จ } }
+    post:
+      tags: ["Admin: Leads"]
+      summary: สร้างลีดด้วยมือ (รับสายโทรศัพท์ / walk-in)
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LeadCreateRequest' } } }
+      responses: { '201': { description: สร้างแล้ว } }
+
+  /admin/leads/board:
+    get:
+      tags: ["Admin: Leads"]
+      summary: ข้อมูลสำหรับบอร์ด Kanban (จัดกลุ่มตามสถานะ)
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - { name: assignedTo, in: query, schema: { type: string } }
+        - { name: source, in: query, schema: { type: string } }
+        - { name: limitPerColumn, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status: { type: string }
+                        total: { type: integer }
+                        items: { type: array, items: { $ref: '#/components/schemas/LeadCard' } }
+
+  /admin/leads/board/reorder:
+    patch:
+      tags: ["Admin: Leads"]
+      summary: อัปเดตตำแหน่งหลังลากวางการ์ด
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [leadId, toStatus, toIndex]
+              properties:
+                leadId: { type: string }
+                toStatus: { type: string }
+                toIndex: { type: integer }
+                lostReason: { type: string, description: จำเป็นเมื่อ toStatus = lost }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/leads/{id}:
+    get:
+      tags: ["Admin: Leads"]
+      summary: รายละเอียดลีด + ไทม์ไลน์
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/leads/{id}/assign:
+    patch:
+      tags: ["Admin: Leads"]
+      summary: มอบหมายผู้ดูแลลีด
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignedTo]
+              properties: { assignedTo: { type: string } }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/leads/{id}/activities:
+    post:
+      tags: ["Admin: Leads"]
+      summary: เพิ่มบันทึกการติดตาม
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, content]
+              properties:
+                type: { type: string, enum: [note, call, line, email, meeting, viewing] }
+                content: { type: string }
+                occurredAt: { type: string, format: date-time }
+                nextFollowUpAt: { type: string, format: date-time }
+      responses: { '201': { description: บันทึกแล้ว } }
+
+  /admin/leads/export:
+    get:
+      tags: ["Admin: Leads"]
+      summary: ส่งออกข้อมูลลีดเป็น CSV (เฉพาะ Owner — บันทึก audit log ทุกครั้ง)
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - { name: dateFrom, in: query, schema: { type: string, format: date } }
+        - { name: dateTo, in: query, schema: { type: string, format: date } }
+      responses:
+        '200': { description: ไฟล์ CSV, content: { text/csv: { schema: { type: string, format: binary } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ══════════════════════════ ADMIN: APPOINTMENTS ══════════════════════════
+  /admin/appointments:
+    get:
+      tags: ["Admin: Appointments"]
+      summary: รายการนัดหมาย
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: assignedTo, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/appointments/calendar:
+    get:
+      tags: ["Admin: Appointments"]
+      summary: ข้อมูลสำหรับปฏิทินนัดหมาย
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date } }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/appointments/{id}/status:
+    patch:
+      tags: ["Admin: Appointments"]
+      summary: เปลี่ยนสถานะการนัดหมาย
+      security: [ { adminAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/Id' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [requested, confirmed, rescheduled, completed, cancelled, no_show] }
+                confirmedDateTime: { type: string, format: date-time }
+                cancelReason: { type: string }
+      responses: { '200': { description: สำเร็จ } }
+
+  # ══════════════════════════ ADMIN: CONTENT ══════════════════════════
+  /admin/pages/{key}:
+    get:
+      tags: ["Admin: Content"]
+      summary: ดึงเนื้อหาหน้าเพื่อแก้ไข
+      security: [ { adminAuth: [] } ]
+      parameters: [ { name: key, in: path, required: true, schema: { type: string } } ]
+      responses: { '200': { description: สำเร็จ } }
+    patch:
+      tags: ["Admin: Content"]
+      summary: บันทึกเนื้อหาหน้า (section ทั้งหมด)
+      security: [ { adminAuth: [] } ]
+      parameters: [ { name: key, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Page' } } }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/menus/{location}:
+    put:
+      tags: ["Admin: Content"]
+      summary: บันทึกเมนูทั้งชุด
+      security: [ { adminAuth: [] } ]
+      parameters: [ { name: location, in: path, required: true, schema: { type: string } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Menu' } } }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/revalidate:
+    post:
+      tags: ["Admin: Content"]
+      summary: สั่ง Next.js สร้างหน้าใหม่ (on-demand ISR)
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paths: { type: array, items: { type: string }, example: ['/', '/property/pool-villa-sukhumvit-49'] }
+                tags: { type: array, items: { type: string } }
+      responses: { '200': { description: สั่งแล้ว } }
+
+  # ══════════════════════════ ADMIN: SETTINGS ══════════════════════════
+  /admin/settings:
+    get:
+      tags: ["Admin: Settings"]
+      summary: ดึงค่าตั้งค่าระบบ (ส่วน integrations แสดงแบบ mask สำหรับผู้ที่ไม่ใช่ Owner)
+      security: [ { adminAuth: [] } ]
+      responses: { '200': { description: สำเร็จ } }
+    patch:
+      tags: ["Admin: Settings"]
+      summary: บันทึกค่าตั้งค่า (บาง section เฉพาะ Owner)
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        '200': { description: สำเร็จ }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/settings/contact-channels:
+    patch:
+      tags: ["Admin: Settings"]
+      summary: แก้ไขช่องทางติดต่อ (เฉพาะ Owner)
+      security: [ { adminAuth: [] } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object } } }
+      responses:
+        '200': { description: สำเร็จ }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ══════════════════════════ ADMIN: DASHBOARD ══════════════════════════
+  /admin/dashboard/summary:
+    get:
+      tags: ["Admin: Dashboard"]
+      summary: ตัวเลขสรุปสำหรับหน้าแดชบอร์ด
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - { name: range, in: query, schema: { type: string, enum: [7d, 30d, 90d, 365d], default: 30d } }
+      responses:
+        '200':
+          description: สำเร็จ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/DashboardSummary' }
+
+  /admin/dashboard/leads-chart:
+    get:
+      tags: ["Admin: Dashboard"]
+      summary: กราฟลีดรายวันแยกตามแหล่งที่มา
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - { name: range, in: query, schema: { type: string, default: 30d } }
+      responses: { '200': { description: สำเร็จ } }
+
+  /admin/audit-logs:
+    get:
+      tags: ["Admin: Settings"]
+      summary: บันทึกการใช้งานระบบ (เฉพาะ Owner)
+      security: [ { adminAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - { name: actorId, in: query, schema: { type: string } }
+        - { name: entityType, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string } }
+      responses:
+        '200': { description: สำเร็จ }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+# ══════════════════════════════ COMPONENTS ══════════════════════════════
+components:
+  securitySchemes:
+    adminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token ของพนักงาน (staff realm) — อายุ 15 นาที
+    customerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token ของลูกค้าสมาชิก (customer realm)
+
+  parameters:
+    Page:   { name: page,  in: query, schema: { type: integer, default: 1, minimum: 1 } }
+    Limit:  { name: limit, in: query, schema: { type: integer, default: 12, minimum: 1, maximum: 100 } }
+    Id:     { name: id,    in: path,  required: true, schema: { type: string }, description: MongoDB ObjectId }
+    Slug:   { name: slug,  in: path,  required: true, schema: { type: string } }
+    AcceptLanguage:
+      name: Accept-Language
+      in: header
+      schema: { type: string, enum: [th, en], default: th }
+
+  responses:
+    BadRequest:
+      description: ข้อมูลไม่ถูกต้อง
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    Unauthorized:
+      description: ไม่ได้ล็อกอินหรือ token หมดอายุ
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    Forbidden:
+      description: สิทธิ์ไม่พอ (เช่น Admin เรียก endpoint ของ Owner)
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    NotFound:
+      description: ไม่พบข้อมูล
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    Conflict:
+      description: ข้อมูลขัดแย้ง
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    Unprocessable:
+      description: ผิดกฎทางธุรกิจ
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+    RateLimited:
+      description: ส่งคำขอถี่เกินไป
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }
+
+  schemas:
+    LocalizedString:
+      type: object
+      properties:
+        th: { type: string }
+        en: { type: string }
+      required: [th]
+
+    GeoPoint:
+      type: object
+      properties:
+        type: { type: string, enum: [Point] }
+        coordinates:
+          type: array
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+          description: '[longitude, latitude] — ลำดับนี้เท่านั้น'
+
+    MediaRef:
+      type: object
+      properties:
+        mediaId: { type: string }
+        url: { type: string, format: uri }
+        variants:
+          type: object
+          properties:
+            thumb: { type: string }
+            medium: { type: string }
+            large: { type: string }
+            original: { type: string }
+        alt: { $ref: '#/components/schemas/LocalizedString' }
+        blurhash: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        sortOrder: { type: integer }
+
+    SeoMeta:
+      type: object
+      properties:
+        metaTitle: { $ref: '#/components/schemas/LocalizedString' }
+        metaDescription: { $ref: '#/components/schemas/LocalizedString' }
+        ogImage: { $ref: '#/components/schemas/MediaRef' }
+        keywords: { type: array, items: { type: string } }
+        canonicalUrl: { type: string }
+        noIndex: { type: boolean }
+
+    PaginatedResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: { type: array, items: {} }
+        meta:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            total: { type: integer }
+            totalPages: { type: integer }
+            sort: { type: string }
+
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string, example: VALIDATION_ERROR }
+            message: { type: string, example: ข้อมูลไม่ถูกต้อง }
+            messageEn: { type: string, example: Validation failed }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+            requestId: { type: string }
+
+    PriceInfo:
+      type: object
+      properties:
+        sale: { type: number, nullable: true }
+        rentMonthly: { type: number, nullable: true }
+        pricePerSqm: { type: number, nullable: true }
+        currency: { type: string, default: THB }
+        hidePrice: { type: boolean }
+        negotiable: { type: boolean }
+
+    AreaInfo:
+      type: object
+      properties:
+        usableSqm: { type: number }
+        landRai: { type: number }
+        landNgan: { type: number }
+        landWah: { type: number }
+        landSqm: { type: number, description: คำนวณอัตโนมัติ = ไร่×1600 + งาน×400 + วา×4 }
+        frontageM: { type: number }
+        depthM: { type: number }
+
+    SpecInfo:
+      type: object
+      properties:
+        bedrooms: { type: integer }
+        bathrooms: { type: integer }
+        parking: { type: integer }
+        floors: { type: integer }
+        floorNo: { type: integer }
+        unitNo: { type: string }
+        buildingName: { type: string }
+        direction: { type: string, enum: [N, NE, E, SE, S, SW, W, NW] }
+        view: { type: array, items: { type: string, enum: [city, river, sea, garden, pool, mountain, golf] } }
+        furnishing: { type: string, enum: [unfurnished, partial, fully] }
+        yearBuilt: { type: integer }
+        condition: { type: string, enum: [new, excellent, good, renovate] }
+        ownership: { type: string, enum: [freehold, leasehold] }
+        leaseYearsRemaining: { type: integer }
+        titleDeedType: { type: string, enum: [chanote, nor_sor_3_gor, nor_sor_3, por_bor_tor_5] }
+
+    LocationInfo:
+      type: object
+      properties:
+        address: { $ref: '#/components/schemas/LocalizedString' }
+        provinceId: { type: string }
+        districtId: { type: string }
+        subdistrictId: { type: string }
+        zone: { type: string }
+        postalCode: { type: string }
+        geo: { $ref: '#/components/schemas/GeoPoint' }
+        hideExactLocation: { type: boolean }
+
+    NearbyPlace:
+      type: object
+      properties:
+        type: { type: string, enum: [bts, mrt, arl, school, university, hospital, mall, market, airport, expressway, park, office] }
+        name: { $ref: '#/components/schemas/LocalizedString' }
+        distanceKm: { type: number }
+        travelMinutes: { type: integer }
+
+    VideoRef:
+      type: object
+      properties:
+        provider: { type: string, enum: [youtube, vimeo, file] }
+        url: { type: string }
+        videoId: { type: string }
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        thumbnail: { type: string }
+        sortOrder: { type: integer }
+
+    AppliedPromotion:
+      type: object
+      description: โปรโมชั่นที่คำนวณสดจากช่วงเวลา ณ เวลาที่เรียก API
+      properties:
+        id: { type: string }
+        badgeText: { $ref: '#/components/schemas/LocalizedString' }
+        badgeColor: { type: string }
+        discountType: { type: string, enum: [percentage, fixed, custom] }
+        discountAmount: { type: number }
+        originalPrice: { type: number }
+        finalPrice: { type: number }
+        endsAt: { type: string, format: date-time }
+        showCountdown: { type: boolean }
+
+    AgentPublic:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        lineId: { type: string }
+        avatarUrl: { type: string }
+        bio: { $ref: '#/components/schemas/LocalizedString' }
+
+    PropertyListItem:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string }
+        slug: { type: string }
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        propertyType: { type: string }
+        listingType: { type: string }
+        status: { type: string }
+        price: { $ref: '#/components/schemas/PriceInfo' }
+        promotion: { $ref: '#/components/schemas/AppliedPromotion' }
+        area: { $ref: '#/components/schemas/AreaInfo' }
+        spec: { $ref: '#/components/schemas/SpecInfo' }
+        location: { $ref: '#/components/schemas/LocationInfo' }
+        coverImage: { $ref: '#/components/schemas/MediaRef' }
+        badges: { type: array, items: { type: string } }
+        agent: { $ref: '#/components/schemas/AgentPublic' }
+        publishedAt: { type: string, format: date-time }
+
+    PropertyDetail:
+      allOf:
+        - $ref: '#/components/schemas/PropertyListItem'
+        - type: object
+          properties:
+            description: { $ref: '#/components/schemas/LocalizedString' }
+            highlights: { type: array, items: { $ref: '#/components/schemas/LocalizedString' } }
+            gallery: { type: array, items: { $ref: '#/components/schemas/MediaRef' } }
+            floorPlans: { type: array, items: { $ref: '#/components/schemas/MediaRef' } }
+            videos: { type: array, items: { $ref: '#/components/schemas/VideoRef' } }
+            virtualTours:
+              type: array
+              items:
+                type: object
+                properties:
+                  provider: { type: string, enum: [matterport, kuula, custom] }
+                  embedUrl: { type: string }
+                  title: { $ref: '#/components/schemas/LocalizedString' }
+            amenities: { type: array, items: { $ref: '#/components/schemas/Amenity' } }
+            nearby: { type: array, items: { $ref: '#/components/schemas/NearbyPlace' } }
+            project: { $ref: '#/components/schemas/ProjectListItem' }
+            seo: { $ref: '#/components/schemas/SeoMeta' }
+            stats:
+              type: object
+              properties:
+                views: { type: integer }
+                favorites: { type: integer }
+
+    PropertyMapPin:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        price: { type: number }
+        geo: { $ref: '#/components/schemas/GeoPoint' }
+        coverThumb: { type: string }
+        propertyType: { type: string }
+
+    PropertyUpsertRequest:
+      type: object
+      required: [title, propertyType, listingType]
+      properties:
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        slug: { type: string }
+        description: { $ref: '#/components/schemas/LocalizedString' }
+        highlights: { type: array, items: { $ref: '#/components/schemas/LocalizedString' } }
+        propertyType: { type: string, enum: [house, condo, land, townhouse, commercial, apartment, villa, office, warehouse, hotel] }
+        listingType: { type: string, enum: [sale, rent, sale_rent] }
+        status: { type: string, enum: [draft, published, reserved, sold, rented, hidden] }
+        projectId: { type: string, nullable: true }
+        price: { $ref: '#/components/schemas/PriceInfo' }
+        area: { $ref: '#/components/schemas/AreaInfo' }
+        spec: { $ref: '#/components/schemas/SpecInfo' }
+        location: { $ref: '#/components/schemas/LocationInfo' }
+        nearby: { type: array, items: { $ref: '#/components/schemas/NearbyPlace' } }
+        amenityIds: { type: array, items: { type: string } }
+        coverImageId: { type: string }
+        galleryIds: { type: array, items: { type: string } }
+        floorPlanIds: { type: array, items: { type: string } }
+        videos: { type: array, items: { $ref: '#/components/schemas/VideoRef' } }
+        agentId: { type: string }
+        ownerContact:
+          type: object
+          description: ข้อมูลเจ้าของทรัพย์ — ไม่เปิดเผยใน public API
+          properties:
+            name: { type: string }
+            phone: { type: string }
+            note: { type: string }
+        isFeatured: { type: boolean }
+        sortWeight: { type: integer }
+        seo: { $ref: '#/components/schemas/SeoMeta' }
+        tags: { type: array, items: { type: string } }
+
+    ProjectListItem:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { $ref: '#/components/schemas/LocalizedString' }
+        developer: { $ref: '#/components/schemas/LocalizedString' }
+        projectType: { type: string }
+        constructionStatus: { type: string }
+        priceRange:
+          type: object
+          properties: { min: { type: number }, max: { type: number } }
+        totalUnits: { type: integer }
+        availableUnits: { type: integer }
+        coverImage: { $ref: '#/components/schemas/MediaRef' }
+        location: { $ref: '#/components/schemas/LocationInfo' }
+
+    ProjectDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProjectListItem'
+        - type: object
+          properties:
+            description: { $ref: '#/components/schemas/LocalizedString' }
+            completionDate: { type: string, format: date }
+            totalBuildings: { type: integer }
+            totalFloors: { type: integer }
+            commonFee: { type: number }
+            sinkingFund: { type: number }
+            foreignQuotaAvailable: { type: boolean }
+            unitTypes:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: { $ref: '#/components/schemas/LocalizedString' }
+                  sizeSqmMin: { type: number }
+                  sizeSqmMax: { type: number }
+                  bedrooms: { type: integer }
+                  priceFrom: { type: number }
+                  floorPlan: { $ref: '#/components/schemas/MediaRef' }
+            facilities: { type: array, items: { $ref: '#/components/schemas/Amenity' } }
+            masterPlan: { type: array, items: { $ref: '#/components/schemas/MediaRef' } }
+            gallery: { type: array, items: { $ref: '#/components/schemas/MediaRef' } }
+            videos: { type: array, items: { $ref: '#/components/schemas/VideoRef' } }
+            nearby: { type: array, items: { $ref: '#/components/schemas/NearbyPlace' } }
+            seo: { $ref: '#/components/schemas/SeoMeta' }
+
+    ArticleListItem:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        excerpt: { $ref: '#/components/schemas/LocalizedString' }
+        coverImage: { $ref: '#/components/schemas/MediaRef' }
+        categories: { type: array, items: { $ref: '#/components/schemas/Taxonomy' } }
+        readingMinutes: { type: integer }
+        publishedAt: { type: string, format: date-time }
+
+    ArticleDetail:
+      allOf:
+        - $ref: '#/components/schemas/ArticleListItem'
+        - type: object
+          properties:
+            content: { $ref: '#/components/schemas/LocalizedString', description: HTML ที่ผ่านการ sanitize แล้ว }
+            videos: { type: array, items: { $ref: '#/components/schemas/VideoRef' } }
+            tags: { type: array, items: { $ref: '#/components/schemas/Taxonomy' } }
+            relatedProperties: { type: array, items: { $ref: '#/components/schemas/PropertyListItem' } }
+            author:
+              type: object
+              properties:
+                displayName: { $ref: '#/components/schemas/LocalizedString' }
+                avatarUrl: { type: string }
+            seo: { $ref: '#/components/schemas/SeoMeta' }
+
+    ArticleUpsertRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        slug: { type: string }
+        excerpt: { $ref: '#/components/schemas/LocalizedString' }
+        content: { $ref: '#/components/schemas/LocalizedString' }
+        coverImageId: { type: string }
+        videos: { type: array, items: { $ref: '#/components/schemas/VideoRef' } }
+        categoryIds: { type: array, items: { type: string } }
+        tagIds: { type: array, items: { type: string } }
+        relatedPropertyIds: { type: array, items: { type: string } }
+        status: { type: string, enum: [draft, scheduled, published, archived] }
+        publishedAt: { type: string, format: date-time }
+        seo: { $ref: '#/components/schemas/SeoMeta' }
+
+    Taxonomy:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [article_category, article_tag, property_collection] }
+        slug: { type: string }
+        name: { $ref: '#/components/schemas/LocalizedString' }
+        count: { type: integer }
+
+    Amenity:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { $ref: '#/components/schemas/LocalizedString' }
+        icon: { type: string }
+        group: { type: string, enum: [unit, project, security, wellness, service] }
+
+    Location:
+      type: object
+      properties:
+        id: { type: string }
+        level: { type: string, enum: [province, district, subdistrict, zone] }
+        parentId: { type: string, nullable: true }
+        name: { $ref: '#/components/schemas/LocalizedString' }
+        slug: { type: string }
+        propertyCount: { type: integer }
+        geo: { $ref: '#/components/schemas/GeoPoint' }
+
+    Promotion:
+      type: object
+      properties:
+        id: { type: string }
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        description: { $ref: '#/components/schemas/LocalizedString' }
+        badgeText: { $ref: '#/components/schemas/LocalizedString' }
+        badgeColor: { type: string }
+        discountType: { type: string, enum: [percentage, fixed, custom] }
+        discountValue: { type: number }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        showCountdown: { type: boolean }
+        bannerImage: { $ref: '#/components/schemas/MediaRef' }
+        terms: { $ref: '#/components/schemas/LocalizedString' }
+        propertyCount: { type: integer }
+
+    PromotionUpsertRequest:
+      type: object
+      required: [title, discountType, startAt, endAt, appliesTo]
+      properties:
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        description: { $ref: '#/components/schemas/LocalizedString' }
+        badgeText: { $ref: '#/components/schemas/LocalizedString' }
+        badgeColor: { type: string, example: '#B3241E' }
+        discountType: { type: string, enum: [percentage, fixed, custom] }
+        discountValue: { type: number }
+        maxDiscountAmount: { type: number }
+        appliesTo: { type: string, enum: [all, properties, projects, property_types, locations] }
+        targetPropertyIds: { type: array, items: { type: string } }
+        targetProjectIds: { type: array, items: { type: string } }
+        targetPropertyTypes: { type: array, items: { type: string } }
+        targetLocationIds: { type: array, items: { type: string } }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        showCountdown: { type: boolean }
+        priority: { type: integer }
+        isActive: { type: boolean }
+        terms: { $ref: '#/components/schemas/LocalizedString' }
+
+    LeadCreateRequest:
+      type: object
+      required: [name, phone, intent, consentAccepted]
+      properties:
+        source: { type: string, enum: [property_form, general_form, floating_form, project_form, article_form, phone, line, walk_in, facebook, manual] }
+        propertyId: { type: string, nullable: true }
+        projectId: { type: string, nullable: true }
+        promotionId: { type: string, nullable: true }
+        name: { type: string, minLength: 2 }
+        phone: { type: string, example: '0812345678' }
+        email: { type: string, format: email }
+        lineId: { type: string }
+        preferredChannel: { type: string, enum: [phone, line, email, whatsapp, messenger] }
+        preferredTime: { type: string, enum: [morning, afternoon, evening, anytime] }
+        intent: { type: string, enum: [buy, rent, sell, invest, consult] }
+        message: { type: string, maxLength: 2000 }
+        budget:
+          type: object
+          properties: { min: { type: number }, max: { type: number } }
+        interestedTypes: { type: array, items: { type: string } }
+        interestedZones: { type: array, items: { type: string } }
+        consentAccepted: { type: boolean, description: ต้องเป็น true ตาม PDPA }
+        recaptchaToken: { type: string }
+        pageUrl: { type: string }
+        utm:
+          type: object
+          properties:
+            source: { type: string }
+            medium: { type: string }
+            campaign: { type: string }
+            term: { type: string }
+            content: { type: string }
+
+    LeadCard:
+      type: object
+      properties:
+        id: { type: string }
+        refNo: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        source: { type: string }
+        intent: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        rating: { type: integer }
+        boardOrder: { type: integer }
+        statusChangedAt: { type: string, format: date-time }
+        daysInStatus: { type: integer }
+        nextFollowUpAt: { type: string, format: date-time }
+        isOverdue: { type: boolean }
+        assignedTo:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            avatarUrl: { type: string }
+        propertySnapshot:
+          type: object
+          properties:
+            code: { type: string }
+            title: { $ref: '#/components/schemas/LocalizedString' }
+            price: { type: number }
+            coverUrl: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    AppointmentCreateRequest:
+      type: object
+      required: [propertyId, name, phone, preferredDate, preferredSlot, consentAccepted]
+      properties:
+        propertyId: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string, format: email }
+        lineId: { type: string }
+        preferredDate: { type: string, format: date }
+        preferredSlot: { type: string, example: '13:00-15:00' }
+        alternativeDate: { type: string, format: date }
+        alternativeSlot: { type: string }
+        partySize: { type: integer, default: 1 }
+        note: { type: string }
+        consentAccepted: { type: boolean }
+        recaptchaToken: { type: string }
+
+    SavedSearch:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        criteria: { type: object, additionalProperties: true }
+        frequency: { type: string, enum: [instant, daily, weekly] }
+        channels:
+          type: object
+          properties: { email: { type: boolean }, line: { type: boolean } }
+        isActive: { type: boolean }
+        matchCountTotal: { type: integer }
+        lastNotifiedAt: { type: string, format: date-time }
+
+    SavedSearchCreateRequest:
+      type: object
+      required: [name, criteria]
+      properties:
+        name: { type: string }
+        criteria: { type: object, additionalProperties: true }
+        frequency: { type: string, enum: [instant, daily, weekly], default: daily }
+        channels:
+          type: object
+          properties: { email: { type: boolean }, line: { type: boolean } }
+
+    LoanDefaults:
+      type: object
+      properties:
+        defaultInterestRate: { type: number, example: 6.5 }
+        defaultDownPaymentPercent: { type: number, example: 20 }
+        defaultTermYears: { type: integer, example: 30 }
+        minTermYears: { type: integer }
+        maxTermYears: { type: integer }
+        interestRatePresets:
+          type: array
+          items:
+            type: object
+            properties:
+              bankName: { type: string }
+              rate: { type: number }
+        disclaimer: { $ref: '#/components/schemas/LocalizedString' }
+
+    LoanCalculateRequest:
+      type: object
+      required: [price, interestRate, termYears]
+      properties:
+        price: { type: number }
+        downPaymentPercent: { type: number }
+        downPaymentAmount: { type: number }
+        interestRate: { type: number, description: อัตราต่อปี (%) }
+        termYears: { type: integer }
+
+    LoanCalculateResult:
+      type: object
+      properties:
+        loanAmount: { type: number }
+        monthlyPayment: { type: number }
+        totalInterest: { type: number }
+        totalPayment: { type: number }
+        schedule:
+          type: array
+          items:
+            type: object
+            properties:
+              year: { type: integer }
+              principalPaid: { type: number }
+              interestPaid: { type: number }
+              remainingBalance: { type: number }
+        disclaimer: { $ref: '#/components/schemas/LocalizedString' }
+
+    PublicSettings:
+      type: object
+      properties:
+        site:
+          type: object
+          properties:
+            name: { $ref: '#/components/schemas/LocalizedString' }
+            tagline: { $ref: '#/components/schemas/LocalizedString' }
+            logoLight: { $ref: '#/components/schemas/MediaRef' }
+            logoDark: { $ref: '#/components/schemas/MediaRef' }
+            enabledLanguages: { type: array, items: { type: string } }
+        contactChannels:
+          type: object
+          properties:
+            phones:
+              type: array
+              items:
+                type: object
+                properties:
+                  label: { $ref: '#/components/schemas/LocalizedString' }
+                  number: { type: string }
+                  isPrimary: { type: boolean }
+            line:
+              type: object
+              properties: { oaId: { type: string }, url: { type: string }, qrImage: { $ref: '#/components/schemas/MediaRef' } }
+            messenger: { type: object, properties: { url: { type: string } } }
+            whatsapp: { type: object, properties: { number: { type: string } } }
+            email: { type: object, properties: { display: { type: string } } }
+        office:
+          type: object
+          properties:
+            address: { $ref: '#/components/schemas/LocalizedString' }
+            geo: { $ref: '#/components/schemas/GeoPoint' }
+            openingHours: { type: array, items: { type: object } }
+        social: { type: object, additionalProperties: { type: string } }
+        features: { type: object, additionalProperties: { type: boolean } }
+        legal:
+          type: object
+          properties:
+            pdpaConsentText: { $ref: '#/components/schemas/LocalizedString' }
+            cookieBannerText: { $ref: '#/components/schemas/LocalizedString' }
+            policyVersion: { type: string }
+
+    PageSection:
+      type: object
+      required: [type]
+      properties:
+        _id: { type: string }
+        type:
+          type: string
+          enum: [hero_slider, search_bar, featured_properties, featured_projects,
+                 property_types_grid, popular_locations, promotions_strip, rich_text,
+                 image_text, stats_counter, testimonials, latest_articles, video_banner,
+                 lead_form, map_section, logo_wall, faq, cta_banner, custom_html]
+        isVisible: { type: boolean, default: true }
+        sortOrder: { type: integer }
+        settings: { type: object, additionalProperties: true }
+        data: { type: object, additionalProperties: true, description: โครงสร้างขึ้นกับ type }
+
+    Page:
+      type: object
+      properties:
+        key: { type: string }
+        type: { type: string, enum: [system, custom] }
+        title: { $ref: '#/components/schemas/LocalizedString' }
+        status: { type: string, enum: [draft, published] }
+        sections: { type: array, items: { $ref: '#/components/schemas/PageSection' } }
+        seo: { $ref: '#/components/schemas/SeoMeta' }
+
+    MenuItem:
+      type: object
+      properties:
+        label: { $ref: '#/components/schemas/LocalizedString' }
+        url: { type: string }
+        type: { type: string, enum: [internal, external, property_filter] }
+        icon: { type: string }
+        sortOrder: { type: integer }
+        isVisible: { type: boolean }
+        openInNewTab: { type: boolean }
+        children: { type: array, items: { $ref: '#/components/schemas/MenuItem' } }
+
+    Menu:
+      type: object
+      properties:
+        location: { type: string }
+        items: { type: array, items: { $ref: '#/components/schemas/MenuItem' } }
+
+    Banner:
+      type: object
+      properties:
+        id: { type: string }
+        placement: { type: string }
+        image: { $ref: '#/components/schemas/MediaRef' }
+        imageMobile: { $ref: '#/components/schemas/MediaRef' }
+        headline: { $ref: '#/components/schemas/LocalizedString' }
+        subtext: { $ref: '#/components/schemas/LocalizedString' }
+        ctaLabel: { $ref: '#/components/schemas/LocalizedString' }
+        linkUrl: { type: string }
+        openInNewTab: { type: boolean }
+
+    SuggestItem:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        label: { type: string }
+        sublabel: { type: string }
+        thumbUrl: { type: string }
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        phone: { type: string }
+        role: { type: string, enum: [owner, admin] }
+        status: { type: string, enum: [active, suspended] }
+        isAgent: { type: boolean }
+        avatarUrl: { type: string }
+        lastLoginAt: { type: string, format: date-time }
+
+    AuthResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            accessToken: { type: string }
+            expiresIn: { type: integer, example: 900 }
+            customer:
+              type: object
+              properties:
+                id: { type: string }
+                email: { type: string }
+                name: { type: string }
+
+    AdminAuthResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            accessToken: { type: string }
+            expiresIn: { type: integer, example: 900 }
+            user: { $ref: '#/components/schemas/User' }
+            permissions: { type: array, items: { type: string } }
+
+    DashboardSummary:
+      type: object
+      properties:
+        range:
+          type: object
+          properties: { from: { type: string }, to: { type: string } }
+        leads:
+          type: object
+          properties:
+            total: { type: integer }
+            new: { type: integer }
+            changePercent: { type: number }
+            bySource: { type: object, additionalProperties: { type: integer } }
+            byStatus: { type: object, additionalProperties: { type: integer } }
+        conversionRate: { type: number }
+        avgFirstResponseMinutes: { type: number }
+        appointments:
+          type: object
+          properties:
+            upcoming: { type: integer }
+            todayCount: { type: integer }
+            completed: { type: integer }
+            noShow: { type: integer }
+        properties:
+          type: object
+          properties:
+            published: { type: integer }
+            draft: { type: integer }
+            sold: { type: integer }
+            expiringSoon: { type: integer }
+        traffic:
+          type: object
+          properties:
+            pageViews: { type: integer }
+            uniqueVisitors: { type: integer }
+            propertyViews: { type: integer }
+            contactClicks: { type: integer }
+        tasks:
+          type: object
+          properties:
+            overdueFollowUps: { type: integer }
+            unassignedLeads: { type: integer }
+            pendingAppointments: { type: integer }
+            missingAltText: { type: integer }
