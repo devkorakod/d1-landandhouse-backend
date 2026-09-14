@@ -8,6 +8,7 @@ import { propertyPublicRouter } from './property.routes.js';
 import { projectPublicRouter } from './project.routes.js';
 import { promotionPublicRouter } from './promotion.routes.js';
 import { settingsPublicRouter } from './settings.routes.js';
+import { pagePublicRouter } from './page.routes.js';
 
 export const publicRouter = Router();
 
@@ -17,6 +18,7 @@ publicRouter.use('/properties', propertyPublicRouter);
 publicRouter.use('/projects', projectPublicRouter);
 publicRouter.use('/promotions', promotionPublicRouter);
 publicRouter.use('/settings', settingsPublicRouter);
+publicRouter.use('/pages', pagePublicRouter);
 
 publicRouter.post('/leads', leadLimiter, validate(leadCreateSchema),
   asyncHandler(async (req, res) => {

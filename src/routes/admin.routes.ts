@@ -10,6 +10,7 @@ import { mediaAdminRouter } from './media.routes.js';
 import { promotionAdminRouter } from './promotion.routes.js';
 import { settingsAdminRouter } from './settings.routes.js';
 import { userAdminRouter } from './user.routes.js';
+import { pageAdminRouter } from './page.routes.js';
 
 export const adminRouter = Router();
 
@@ -26,6 +27,7 @@ adminRouter.use('/media', mediaAdminRouter);
 adminRouter.use('/promotions', promotionAdminRouter);
 adminRouter.use('/settings', settingsAdminRouter);
 adminRouter.use('/users', userAdminRouter);
+adminRouter.use('/pages', pageAdminRouter);
 
 adminRouter.get('/ping', (req, res) => {
   res.json({ success: true, data: { role: req.auth?.role, at: new Date().toISOString() } });
