@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { Lead, Property } from '../../models/index.js';
 import type { LeadCreateInput } from '../../types/index.js';
 import { logger } from '../../config/logger.js';
+import { sendTelegramMessage, newLeadMessage } from '../notify/telegram.service.js';
 
 export interface LeadContext { ip?: string; userAgent?: string; policyVersion?: string }
 
@@ -58,8 +59,12 @@ export async function createLead(input: LeadCreateInput, ctx: LeadContext) {
     void Property.updateOne({ _id: input.propertyId }, { $inc: { 'stats.leads': 1 } });
   }
 
-  // 4) แจ้งเตือนทีมขาย
-  // MVP: log ไว้ก่อน — ของจริงค่อยต่อ email/LINE Notify (ต้องมี SMTP/Redis queue ก่อน)
+  // 4) แจ้งเตือนทีมขายผ่าน Telegram — ไม่รอผลลัพธ์ ไม่ block การตอบกลับลูกค้า
   logger.info({ refNo: lead.refNo, source: lead.source }, '🔔 รับลีดใหม่ — ต้องติดต่อกลับ');
+  void sendTelegramMessage(newLeadMessage({
+    refNo: lead.refNo, name: lead.name, phone: lead.phone, intent: lead.intent,
+    source: lead.source, propertySnapshot: snapshot,
+  }));
+
   return lead;
 }

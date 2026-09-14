@@ -18,8 +18,11 @@ Swagger docs (dev only): `http://localhost:4000/docs`
 ## Simplifications vs. the full system design (documented, not silently dropped)
 
 - **No Redis/BullMQ.** Promotion lookups and lead notifications run synchronously/inline
-  instead of through a queue+worker. Lead creation just logs; real email/LINE Notify
-  sending needs SMTP/LINE credentials plus reintroducing a queue.
+  instead of through a queue+worker — fine at this scale, revisit if lead volume grows.
+- **Lead notifications go to Telegram, not email.** New leads post to a Telegram chat via
+  Bot API (`TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` in `.env` — see `.env.example` for how
+  to get them from @BotFather / @userinfobot). Leave them blank and the app still runs;
+  it just logs and skips sending. Email/SMTP is not implemented.
 - **No image resizing (sharp).** Uploaded media is stored as a single original file;
   `variants.thumb/medium/large` all point at the same URL. Multi-size WebP/AVIF generation
   is a follow-up.

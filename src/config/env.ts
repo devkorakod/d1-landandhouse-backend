@@ -18,6 +18,10 @@ const schema = z.object({
   UPLOAD_DIR: z.string().default('uploads'),
   STORAGE_PUBLIC_URL: z.string().default('http://localhost:4000/uploads'),
 
+  ADMIN_BASE_URL: z.string().default('http://localhost:5173'),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
+
   SEED_OWNER_EMAIL: z.string().default('owner@d1landandhouse.co.th'),
   SEED_OWNER_PASSWORD: z.string().default('ChangeMe123!'),
 
