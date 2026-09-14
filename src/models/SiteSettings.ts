@@ -15,6 +15,13 @@ const siteSettingsSchema = new Schema({
     address: LocalizedStringSchema,
     officeHours: { type: String, default: '' },
   },
+  // การตั้งค่านี้เป็นข้อมูลภายใน — ห้ามส่งออกทาง settingsPublicRouter
+  notifications: {
+    enabled: { type: Boolean, default: true },
+    telegramEnabled: { type: Boolean, default: true },
+    emailEnabled: { type: Boolean, default: false },
+    notifyEmail: { type: String, default: '' },
+  },
   socials: {
     facebook: { type: String, default: '' },
     instagram: { type: String, default: '' },

@@ -22,6 +22,12 @@ const schema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
 
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default('D1LANDANDHOUSE <notify@d1landandhouse.co.th>'),
+
   SEED_OWNER_EMAIL: z.string().default('owner@d1landandhouse.co.th'),
   SEED_OWNER_PASSWORD: z.string().default('ChangeMe123!'),
 

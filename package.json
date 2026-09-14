@@ -27,6 +27,7 @@
     "mongoose": "^8.6.0",
     "multer": "^2.4.0",
     "nanoid": "^5.0.7",
+    "nodemailer": "^10.0.10",
     "pino": "^9.3.2",
     "pino-http": "^10.2.0",
     "pino-pretty": "^11.2.2",
@@ -43,6 +44,7 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/multer": "^2.2.0",
     "@types/node": "^20.14.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/swagger-ui-express": "^4.1.6",
     "tsx": "^4.16.0",
     "typescript": "^5.5.4"

@@ -31,6 +31,12 @@ const updateSchema = z.object({
   siteName: z.string().optional(),
   tagline: z.object({ th: z.string(), en: z.string().optional() }).partial().optional(),
   contactChannels: z.record(z.any()).optional(),
+  notifications: z.object({
+    enabled: z.boolean().optional(),
+    telegramEnabled: z.boolean().optional(),
+    emailEnabled: z.boolean().optional(),
+    notifyEmail: z.string().email().or(z.literal('')).optional(),
+  }).partial().optional(),
   socials: z.record(z.any()).optional(),
   loanDefaults: z.record(z.any()).optional(),
   seoDefault: z.record(z.any()).optional(),

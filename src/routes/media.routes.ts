@@ -7,6 +7,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { Media } from '../models/index.js';
 import { env } from '../config/env.js';
+import { getUsedMediaIdSet, getUsedMediaUrlSet, isMediaInUse } from '../modules/media/usage.js';
 
 export const mediaAdminRouter = Router();
 
@@ -33,7 +34,12 @@ const upload = multer({
 mediaAdminRouter.get('/', asyncHandler(async (req, res) => {
   const folder = req.query.folder as string | undefined;
   const items = await Media.find(folder ? { folder } : {}).sort('-createdAt').limit(200).lean();
-  res.json({ success: true, data: items });
+  const [usedIds, usedUrls] = await Promise.all([getUsedMediaIdSet(), getUsedMediaUrlSet()]);
+  const data = items.map((m) => ({
+    ...m,
+    usageCount: (usedIds.has(String(m._id)) || usedUrls.has(m.url)) ? 1 : 0,
+  }));
+  res.json({ success: true, data });
 }));
 
 mediaAdminRouter.post('/', upload.single('file'), asyncHandler(async (req, res) => {
@@ -61,7 +67,7 @@ mediaAdminRouter.post('/', upload.single('file'), asyncHandler(async (req, res) 
 mediaAdminRouter.delete('/:id', asyncHandler(async (req, res) => {
   const media = await Media.findById(req.params.id);
   if (!media) throw ApiError.notFound('ไม่พบไฟล์ที่ต้องการ');
-  if (media.usageCount > 0) throw ApiError.conflict('MEDIA_IN_USE', 'ไฟล์นี้ถูกใช้งานอยู่ ลบไม่ได้');
+  if (await isMediaInUse(media)) throw ApiError.conflict('MEDIA_IN_USE', 'ไฟล์นี้ถูกใช้งานอยู่ ลบไม่ได้');
   const filePath = path.join(uploadDir, media.filename);
   fs.rm(filePath, { force: true }, () => {});
   await media.deleteOne();

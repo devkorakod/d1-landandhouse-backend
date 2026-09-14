@@ -14,8 +14,10 @@ export const authRouter = Router();
 const REFRESH_COOKIE = 'refreshToken';
 const cookieOptions = {
   httpOnly: true,
+  // production: frontend/backoffice (Vercel) และ backend (Render) อยู่คนละโดเมนกันเสมอ
+  // ต้องใช้ SameSite=None ถึงจะส่งคุกกี้ข้ามโดเมนได้ — SameSite=None บังคับต้องมี Secure ด้วย
   secure: isProd,
-  sameSite: 'lax' as const,
+  sameSite: (isProd ? 'none' : 'lax') as 'none' | 'lax',
   path: '/api/v1/admin/auth',
   maxAge: 7 * 24 * 3600_000,
 };

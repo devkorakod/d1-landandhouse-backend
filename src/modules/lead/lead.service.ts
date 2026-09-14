@@ -1,8 +1,9 @@
 import { Types } from 'mongoose';
-import { Lead, Property } from '../../models/index.js';
+import { Lead, Property, getSiteSettings } from '../../models/index.js';
 import type { LeadCreateInput } from '../../types/index.js';
 import { logger } from '../../config/logger.js';
 import { sendTelegramMessage, newLeadMessage } from '../notify/telegram.service.js';
+import { sendNotifyEmail, newLeadEmail } from '../notify/email.service.js';
 
 export interface LeadContext { ip?: string; userAgent?: string; policyVersion?: string }
 
@@ -59,12 +60,22 @@ export async function createLead(input: LeadCreateInput, ctx: LeadContext) {
     void Property.updateOne({ _id: input.propertyId }, { $inc: { 'stats.leads': 1 } });
   }
 
-  // 4) แจ้งเตือนทีมขายผ่าน Telegram — ไม่รอผลลัพธ์ ไม่ block การตอบกลับลูกค้า
+  // 4) แจ้งเตือนทีมขาย ตามช่องทางที่เปิดไว้ใน ตั้งค่า > การแจ้งเตือน — ไม่รอผลลัพธ์ ไม่ block การตอบกลับลูกค้า
   logger.info({ refNo: lead.refNo, source: lead.source }, '🔔 รับลีดใหม่ — ต้องติดต่อกลับ');
-  void sendTelegramMessage(newLeadMessage({
+  const notifyPayload = {
     refNo: lead.refNo, name: lead.name, phone: lead.phone, intent: lead.intent,
     source: lead.source, propertySnapshot: snapshot,
-  }));
+  };
+  void (async () => {
+    const settings = await getSiteSettings();
+    const n = settings.notifications;
+    if (!n?.enabled) return;
+    if (n.telegramEnabled) void sendTelegramMessage(newLeadMessage(notifyPayload));
+    if (n.emailEnabled && n.notifyEmail) {
+      const { subject, html } = newLeadEmail(notifyPayload);
+      void sendNotifyEmail(n.notifyEmail, subject, html);
+    }
+  })();
 
   return lead;
 }

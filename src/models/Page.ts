@@ -35,9 +35,9 @@ export const DEFAULT_HOME_SECTIONS = [
       imageUrl: '',
     },
   },
-  { type: 'featuredProperties', visible: true, data: { eyebrow: 'Featured', heading: 'ทรัพย์แนะนำ', limit: 4 } },
+  { type: 'featuredProperties', visible: true, data: { eyebrow: 'Featured', heading: 'อสังหาริมทรัพย์แนะนำ', limit: 4 } },
   { type: 'featuredProjects', visible: true, data: { eyebrow: 'Projects', heading: 'โครงการแนะนำ', limit: 3 } },
-  { type: 'latestProperties', visible: true, data: { eyebrow: 'New', heading: 'ทรัพย์ประกาศใหม่', limit: 8 } },
+  { type: 'latestProperties', visible: true, data: { eyebrow: 'New', heading: 'อสังหาริมทรัพย์มาใหม่', limit: 8 } },
   {
     type: 'leadForm',
     visible: true,
