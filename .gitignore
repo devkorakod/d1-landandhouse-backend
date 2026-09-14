@@ -4,5 +4,8 @@ dist/
 build/
 .env
 .env.local
+*.env
+!.env.example
+atlas-credentials.env
 *.log
 .DS_Store
