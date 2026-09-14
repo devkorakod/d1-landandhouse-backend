@@ -39,29 +39,30 @@ export async function login(email: string, password: string, ctx: AuthContext) {
 
   const ok = await user.comparePassword(password);
   if (!ok) {
-    user.loginFailCount = (user.loginFailCount ?? 0) + 1;
-    if (user.loginFailCount >= MAX_FAIL_COUNT) {
-      user.lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60_000);
-      user.loginFailCount = 0;
-    }
-    await user.save();
+    const failCount = (user.loginFailCount ?? 0) + 1;
+    const update = failCount >= MAX_FAIL_COUNT
+      ? { loginFailCount: 0, lockedUntil: new Date(Date.now() + LOCK_MINUTES * 60_000) }
+      : { loginFailCount: failCount };
+    // atomic update — ไม่ใช้ findById+save เพราะแข่งกับ request อื่นแล้วชน optimistic version ได้
+    await User.updateOne({ _id: user._id }, { $set: update });
     throw ApiError.unauthorized('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
   }
 
-  user.loginFailCount = 0;
-  user.lastLoginAt = new Date();
-
   const refreshToken = signRefreshToken(String(user._id));
-  user.refreshTokens = [
-    ...(user.refreshTokens ?? []).filter((t: any) => t.expiresAt > new Date()),
-    {
-      tokenHash: hashToken(refreshToken),
-      userAgent: ctx.userAgent,
-      ip: ctx.ip,
-      expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
+  await User.updateOne({ _id: user._id }, {
+    $set: { loginFailCount: 0, lastLoginAt: new Date() },
+    $push: {
+      refreshTokens: {
+        $each: [{
+          tokenHash: hashToken(refreshToken),
+          userAgent: ctx.userAgent,
+          ip: ctx.ip,
+          expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
+        }],
+        $slice: -10, // เก็บ session ล่าสุดไว้ไม่เกิน 10 อุปกรณ์ ตัดอันเก่า/หมดอายุทิ้งไปเอง
+      },
     },
-  ];
-  await user.save();
+  });
 
   const accessToken = signAccessToken({
     sub: String(user._id), realm: 'staff', role: user.role, email: user.email,
@@ -82,27 +83,28 @@ export async function refresh(refreshToken: string, ctx: AuthContext) {
     throw ApiError.unauthorized('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
   }
 
-  const user = await User.findById(decoded.sub);
-  if (!user) throw ApiError.unauthorized();
-
   const hash = hashToken(refreshToken);
-  const stored = (user.refreshTokens ?? []).find((t: any) => t.tokenHash === hash);
-  if (!stored || stored.expiresAt < new Date()) {
-    throw ApiError.unauthorized('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
-  }
+  const newRefreshToken = signRefreshToken(decoded.sub);
 
-  // หมุนเวียน refresh token (revoke อันเก่า ออกอันใหม่)
-  const newRefreshToken = signRefreshToken(String(user._id));
-  user.refreshTokens = [
-    ...(user.refreshTokens ?? []).filter((t: any) => t.tokenHash !== hash && t.expiresAt > new Date()),
+  // หมุนเวียน token แบบ atomic ในคำสั่งเดียว (positional $) — ไม่ต้อง findById+save
+  // ถ้ามี request คู่แข่งใช้ refresh token ตัวเดิมพร้อมกัน จะมีแค่ตัวเดียวที่แมตช์และชนะ
+  // ส่วนตัวที่แพ้จะไม่พบเอกสาร (เพราะ tokenHash ถูกแทนที่ไปแล้ว) แล้วได้ 401 ตามปกติ ไม่ใช่ 500
+  const user = await User.findOneAndUpdate(
     {
-      tokenHash: hashToken(newRefreshToken),
-      userAgent: ctx.userAgent,
-      ip: ctx.ip,
-      expiresAt: new Date(Date.now() + 7 * 24 * 3600_000),
+      _id: decoded.sub,
+      refreshTokens: { $elemMatch: { tokenHash: hash, expiresAt: { $gt: new Date() } } },
     },
-  ];
-  await user.save();
+    {
+      $set: {
+        'refreshTokens.$.tokenHash': hashToken(newRefreshToken),
+        'refreshTokens.$.userAgent': ctx.userAgent,
+        'refreshTokens.$.ip': ctx.ip,
+        'refreshTokens.$.expiresAt': new Date(Date.now() + 7 * 24 * 3600_000),
+      },
+    },
+    { new: true },
+  );
+  if (!user) throw ApiError.unauthorized('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
 
   const accessToken = signAccessToken({
     sub: String(user._id), realm: 'staff', role: user.role, email: user.email,
@@ -113,9 +115,8 @@ export async function refresh(refreshToken: string, ctx: AuthContext) {
 
 export async function logout(userId: string, refreshToken?: string) {
   if (!refreshToken) return;
-  const user = await User.findById(userId);
-  if (!user) return;
-  const hash = hashToken(refreshToken);
-  user.refreshTokens = (user.refreshTokens ?? []).filter((t: any) => t.tokenHash !== hash);
-  await user.save();
+  await User.updateOne(
+    { _id: userId },
+    { $pull: { refreshTokens: { tokenHash: hashToken(refreshToken) } } },
+  );
 }

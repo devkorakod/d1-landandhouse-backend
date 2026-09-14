@@ -1,5 +1,20 @@
-import { Property, User } from '../models/index.js';
+import { Property, User, Media } from '../models/index.js';
 import { logger } from '../config/logger.js';
+
+/** placeholder เท่านั้น — สลับเป็นภาพจริงตอนแอดมินอัปโหลด/แก้ไขทรัพย์ */
+async function placeholderMedia(seedNo: number, altTh: string) {
+  const url = `https://picsum.photos/seed/d1lh-${seedNo}/1200/800`;
+  const existing = await Media.findOne({ filename: `seed-${seedNo}` });
+  if (existing) return existing;
+  return Media.create({
+    filename: `seed-${seedNo}`,
+    type: 'image',
+    url,
+    variants: { thumb: url, medium: url, large: url, original: url },
+    alt: { th: altTh },
+    folder: 'seed',
+  });
+}
 
 const SAMPLE = [
   {
@@ -49,10 +64,17 @@ const SAMPLE = [
 export async function seedSampleProperties() {
   const agent = await User.findOne({ role: 'owner' }).lean();
   let created = 0;
-  for (const p of SAMPLE) {
+  for (const [i, p] of SAMPLE.entries()) {
     const exists = await Property.findOne({ code: p.code });
     if (exists) continue;
-    await Property.create({ ...p, agentId: agent?._id });
+    const media = await placeholderMedia(i + 1, p.coverImage.alt.th);
+    await Property.create({
+      ...p,
+      agentId: agent?._id,
+      coverImage: {
+        mediaId: media._id, url: media.url, variants: media.variants, alt: media.alt,
+      },
+    });
     created++;
   }
   logger.info({ created }, '🏠 Seed ทรัพย์ตัวอย่าง');
