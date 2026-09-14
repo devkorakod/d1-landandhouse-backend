@@ -42,9 +42,14 @@ export async function listPublicProperties(q: PublicListQuery) {
   if (q.isFeatured === 'true') filter.isFeatured = true;
   if (q.bedrooms) filter['spec.bedrooms'] = { $gte: Number(q.bedrooms) };
   if (q.minPrice || q.maxPrice) {
-    filter['price.sale'] = {};
-    if (q.minPrice) filter['price.sale'].$gte = Number(q.minPrice);
-    if (q.maxPrice) filter['price.sale'].$lte = Number(q.maxPrice);
+    const range: FilterQuery<any> = {};
+    if (q.minPrice) range.$gte = Number(q.minPrice);
+    if (q.maxPrice) range.$lte = Number(q.maxPrice);
+    // ทรัพย์ขายเก็บราคาไว้ที่ price.sale ส่วนทรัพย์เช่าเก็บที่ price.rentMonthly —
+    // ถ้าไม่ได้ระบุ listingType มาด้วย ต้องเช็คทั้งสองช่อง ไม่งั้นทรัพย์เช่าจะหายไปหมด
+    if (q.listingType === 'rent') filter['price.rentMonthly'] = range;
+    else if (q.listingType === 'sale') filter['price.sale'] = range;
+    else filter.$or = [{ 'price.sale': range }, { 'price.rentMonthly': range }];
   }
   if (q.keyword) filter.$text = { $search: q.keyword };
 
