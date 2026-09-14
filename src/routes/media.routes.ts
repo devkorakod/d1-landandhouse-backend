@@ -48,7 +48,11 @@ mediaAdminRouter.post('/', upload.single('file'), asyncHandler(async (req, res) 
     url,
     variants: { thumb: url, medium: url, large: url, original: url },
     folder: (req.body?.folder as string) || 'general',
-    alt: { th: (req.body?.altTh as string) || '' },
+    // alt.th is required on the schema — fall back to the filename (minus extension)
+    // rather than an empty string, since the upload UI doesn't collect alt text yet
+    alt: {
+      th: (req.body?.altTh as string) || path.parse(req.file.originalname).name || 'รูปภาพ',
+    },
     uploadedBy: req.auth?.sub,
   });
   res.status(201).json({ success: true, data: media });

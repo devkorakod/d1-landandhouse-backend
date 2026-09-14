@@ -59,7 +59,7 @@ projectAdminRouter.get('/:id', asyncHandler(async (req, res) => {
 async function buildProjectDoc(input: z.infer<typeof projectUpsertSchema>, existing?: any) {
   const [coverImage, gallery] = await Promise.all([
     input.coverImageId ? resolveMediaRef(input.coverImageId) : existing?.coverImage,
-    input.galleryIds?.length ? resolveMediaRefs(input.galleryIds) : existing?.gallery,
+    input.galleryIds !== undefined ? resolveMediaRefs(input.galleryIds) : existing?.gallery,
   ]);
   const priceRange = input.unitTypes?.length
     ? {

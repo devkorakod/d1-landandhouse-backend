@@ -67,10 +67,13 @@ propertyAdminRouter.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 async function buildPropertyDoc(input: z.infer<typeof propertyUpsertSchema>, existing?: any) {
+  // ใช้ !== undefined ไม่ใช่ .length — ถ้าเช็คแค่ .length จะแยกไม่ออกระหว่าง
+  // "ไม่ได้ส่ง field นี้มา (คงค่าเดิม)" กับ "ส่งมาเป็น [] (ตั้งใจล้างรายการ)"
+  // ทำให้ลบรูปทั้งหมดออกจาก gallery ผ่านฟอร์มไม่เคยเซฟติดจริง
   const [coverImage, gallery, floorPlans] = await Promise.all([
     input.coverImageId ? resolveMediaRef(input.coverImageId) : existing?.coverImage,
-    input.galleryIds?.length ? resolveMediaRefs(input.galleryIds) : existing?.gallery,
-    input.floorPlanIds?.length ? resolveMediaRefs(input.floorPlanIds) : existing?.floorPlans,
+    input.galleryIds !== undefined ? resolveMediaRefs(input.galleryIds) : existing?.gallery,
+    input.floorPlanIds !== undefined ? resolveMediaRefs(input.floorPlanIds) : existing?.floorPlans,
   ]);
 
   return {
