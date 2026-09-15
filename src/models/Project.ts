@@ -20,6 +20,7 @@ const projectSchema = new Schema({
     provinceId: { type: Types.ObjectId, ref: 'Location' },
     districtId: { type: Types.ObjectId, ref: 'Location' },
     zone: String,
+    zoneEn: String,
     postalCode: String,
     geo: GeoPointSchema,
   },

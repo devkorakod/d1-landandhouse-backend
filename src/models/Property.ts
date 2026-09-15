@@ -59,6 +59,7 @@ const propertySchema = new Schema({
     districtId: { type: Types.ObjectId, ref: 'Location' },
     subdistrictId: { type: Types.ObjectId, ref: 'Location' },
     zone: String,
+    zoneEn: String,
     postalCode: String,
     geo: GeoPointSchema,
     hideExactLocation: { type: Boolean, default: false },

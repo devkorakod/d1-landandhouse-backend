@@ -74,6 +74,7 @@ export const propertyUpsertSchema = z.object({
     districtId: z.string().optional(),
     subdistrictId: z.string().optional(),
     zone: z.string().optional(),
+    zoneEn: z.string().optional(),
     postalCode: z.string().optional(),
     geo: geoPointSchema.optional(),
     hideExactLocation: z.boolean().default(false),

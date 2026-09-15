@@ -14,6 +14,7 @@ export const projectUpsertSchema = z.object({
   location: z.object({
     address: localizedStringSchema.partial().optional(),
     zone: z.string().optional(),
+    zoneEn: z.string().optional(),
     postalCode: z.string().optional(),
   }).default({}),
   totalUnits: z.number().int().nonnegative().optional(),
