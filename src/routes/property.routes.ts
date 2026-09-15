@@ -10,6 +10,7 @@ import {
   generatePropertySlug, generatePropertyCode,
 } from '../modules/property/property.service.js';
 import { toPublicListItem, toPublicDetail, toAdminDetail } from '../modules/property/property.serializer.js';
+import { notifyMatchingAlerts } from '../modules/alert/alert.service.js';
 
 export const propertyPublicRouter = Router();
 export const propertyAdminRouter = Router();
@@ -113,16 +114,19 @@ propertyAdminRouter.post('/', validate(propertyUpsertSchema), asyncHandler(async
   const property = await Property.create({
     ...doc, slug, code, createdBy: req.auth?.sub, updatedBy: req.auth?.sub,
   });
+  if (property.status === 'published') void notifyMatchingAlerts(property.toObject());
   res.status(201).json({ success: true, data: toAdminDetail(property.toObject()) });
 }));
 
 propertyAdminRouter.patch('/:id', validate(propertyUpsertSchema.partial()), asyncHandler(async (req, res) => {
   const existing = await Property.findOne({ _id: req.params.id, deletedAt: null });
   if (!existing) throw ApiError.notFound('ไม่พบทรัพย์ที่ต้องการ');
+  const wasPublished = existing.status === 'published';
   const input = req.body as Partial<z.infer<typeof propertyUpsertSchema>>;
   const doc = await buildPropertyDoc({ ...existing.toObject(), ...input } as any, existing);
   Object.assign(existing, doc, { updatedBy: req.auth?.sub });
   await existing.save();
+  if (!wasPublished && existing.status === 'published') void notifyMatchingAlerts(existing.toObject());
   res.json({ success: true, data: toAdminDetail(existing.toObject()) });
 }));
 

@@ -6,6 +6,7 @@ export { Promotion } from './Promotion.js';
 export { Media } from './Media.js';
 export { SiteSettings, getSiteSettings } from './SiteSettings.js';
 export { Page, DEFAULT_HOME_SECTIONS } from './Page.js';
+export { PropertyAlert } from './PropertyAlert.js';
 // TODO (เฟสถัดไป): Customer, Article, Taxonomy, Amenity, Location,
-// LeadActivity, Appointment, SavedSearch, Favorite, Banner, Menu,
+// LeadActivity, Appointment, Favorite, Banner, Menu,
 // AuditLog, AnalyticsEvent — ดูรายละเอียด field ที่ system-design.md section 6

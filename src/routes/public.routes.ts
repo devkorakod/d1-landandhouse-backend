@@ -9,6 +9,8 @@ import { projectPublicRouter } from './project.routes.js';
 import { promotionPublicRouter } from './promotion.routes.js';
 import { settingsPublicRouter } from './settings.routes.js';
 import { pagePublicRouter } from './page.routes.js';
+import { alertPublicRouter } from './alert.routes.js';
+import { agentPublicRouter } from './agent.routes.js';
 
 export const publicRouter = Router();
 
@@ -19,6 +21,8 @@ publicRouter.use('/projects', projectPublicRouter);
 publicRouter.use('/promotions', promotionPublicRouter);
 publicRouter.use('/settings', settingsPublicRouter);
 publicRouter.use('/pages', pagePublicRouter);
+publicRouter.use('/property-alerts', alertPublicRouter);
+publicRouter.use('/agents', agentPublicRouter);
 
 publicRouter.post('/leads', leadLimiter, validate(leadCreateSchema),
   asyncHandler(async (req, res) => {

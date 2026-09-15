@@ -24,9 +24,11 @@ export function toPublicListItem(p: any) {
     location: maskLocation(p.location),
     coverImage: p.coverImage,
     badges: buildBadges(p),
-    project: p.project ? { id: String(p.project._id), name: p.project.name,
-                           slug: p.project.slug } : null,
-    agent: p.agent ? toPublicAgent(p.agent) : null,
+    // agentId/projectId เป็น populated doc ก็ต่อเมื่อ query ต้นทางสั่ง .populate() ไว้ —
+    // เช็คว่า populate จริงด้วย .name แทนที่จะเชื่อว่ามี key `agent`/`project` ซึ่งไม่มีจริง
+    project: p.projectId?.name ? { id: String(p.projectId._id), name: p.projectId.name,
+                                    slug: p.projectId.slug } : null,
+    agent: p.agentId?.name ? toPublicAgent(p.agentId) : null,
     publishedAt: p.publishedAt,
   };
 }

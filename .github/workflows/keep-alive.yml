@@ -1,0 +1,20 @@
+name: Keep backend awake
+
+# Render free tier spins the service down after ~15 min of no traffic, and the
+# next real visitor eats a 50s+ cold start. Ping /healthz often enough that it
+# never gets the chance to sleep.
+#
+# NOTE: GitHub only fires the `schedule` trigger from the repo's default
+# branch — this file has to exist there (not just on `dev`) for the cron to
+# actually run. workflow_dispatch below lets you trigger it manually from any
+# branch to test it in the meantime.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -sf https://d1-landandhouse-backend.onrender.com/healthz

@@ -53,7 +53,9 @@ export async function listPublicProperties(q: PublicListQuery) {
   }
   if (q.keyword) filter.$text = { $search: q.keyword };
 
-  const query = Property.find(filter);
+  const query = Property.find(filter)
+    .populate('agentId', 'name phone lineId avatar')
+    .populate('projectId', 'name slug');
   const { items, meta } = await paginate(query, {
     page: Number(q.page) || 1,
     limit: Number(q.limit) || 12,
