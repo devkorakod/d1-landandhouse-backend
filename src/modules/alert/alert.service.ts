@@ -13,7 +13,7 @@ export async function subscribeAlert(input: AlertSubscribeInput) {
   return PropertyAlert.create({ ...input, email: input.email.toLowerCase() });
 }
 
-function matches(alert: any, property: any): boolean {
+export function matches(alert: any, property: any): boolean {
   if (alert.propertyType && alert.propertyType !== property.propertyType) return false;
   if (alert.listingType && alert.listingType !== property.listingType) return false;
   if (alert.zone && !new RegExp(alert.zone, 'i').test(property.location?.zone ?? '')) return false;

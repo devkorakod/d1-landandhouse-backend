@@ -33,7 +33,7 @@ const SORT_MAP: Record<string, string> = {
   featured: '-isFeatured -sortWeight -publishedAt',
 };
 
-export async function listPublicProperties(q: PublicListQuery) {
+export function buildPublicListFilter(q: PublicListQuery): FilterQuery<any> {
   const filter: FilterQuery<any> = { status: 'published', deletedAt: null };
   if (q.propertyType) filter.propertyType = q.propertyType;
   if (q.listingType) filter.listingType = q.listingType;
@@ -52,7 +52,11 @@ export async function listPublicProperties(q: PublicListQuery) {
     else filter.$or = [{ 'price.sale': range }, { 'price.rentMonthly': range }];
   }
   if (q.keyword) filter.$text = { $search: q.keyword };
+  return filter;
+}
 
+export async function listPublicProperties(q: PublicListQuery) {
+  const filter = buildPublicListFilter(q);
   const query = Property.find(filter)
     .populate('agentId', 'name phone lineId avatar')
     .populate('projectId', 'name slug');
@@ -63,6 +67,22 @@ export async function listPublicProperties(q: PublicListQuery) {
   });
   const withPromotions = await attachPromotions(items as any[]);
   return { items: withPromotions, meta };
+}
+
+export async function getRelatedProperties(property: any, limit = 4) {
+  const related = await Property.find({
+    status: 'published', deletedAt: null, _id: { $ne: property._id },
+    $or: [
+      { propertyType: property.propertyType },
+      { 'location.zone': property.location?.zone },
+    ],
+  })
+    .populate('agentId', 'name phone lineId avatar')
+    .populate('projectId', 'name slug')
+    .sort('-isFeatured -sortWeight -publishedAt')
+    .limit(limit)
+    .lean();
+  return attachPromotions(related as any[]);
 }
 
 export async function getPublicPropertyBySlug(slug: string) {

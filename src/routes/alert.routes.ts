@@ -15,6 +15,7 @@ const subscribeSchema = z.object({
   zone: z.string().optional(),
   minPrice: z.coerce.number().optional(),
   maxPrice: z.coerce.number().optional(),
+  website: z.string().max(0).optional(),   // honeypot — ต้องว่างเสมอ
 }).strict();
 
 alertPublicRouter.post('/', leadLimiter, validate(subscribeSchema), asyncHandler(async (req, res) => {

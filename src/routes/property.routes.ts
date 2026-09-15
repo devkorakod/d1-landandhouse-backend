@@ -6,7 +6,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { Property } from '../models/index.js';
 import { propertyUpsertSchema } from '../types/index.js';
 import {
-  listPublicProperties, getPublicPropertyBySlug, resolveMediaRef, resolveMediaRefs,
+  listPublicProperties, getPublicPropertyBySlug, getRelatedProperties, resolveMediaRef, resolveMediaRefs,
   generatePropertySlug, generatePropertyCode,
 } from '../modules/property/property.service.js';
 import { toPublicListItem, toPublicDetail, toAdminDetail } from '../modules/property/property.serializer.js';
@@ -39,7 +39,11 @@ propertyPublicRouter.get('/', validate(listQuerySchema, 'query'), asyncHandler(a
 propertyPublicRouter.get('/:slug', asyncHandler(async (req, res) => {
   const property = await getPublicPropertyBySlug(req.params.slug);
   if (!property) throw ApiError.notFound('ไม่พบทรัพย์ที่ต้องการ');
-  res.json({ success: true, data: toPublicDetail(property) });
+  const related = await getRelatedProperties(property);
+  res.json({
+    success: true,
+    data: { ...toPublicDetail(property), relatedProperties: related.map(toPublicListItem) },
+  });
 }));
 
 // ── Admin ────────────────────────────────────────────────
